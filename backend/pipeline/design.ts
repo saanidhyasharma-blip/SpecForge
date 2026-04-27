@@ -246,7 +246,7 @@ function mergeDesigns(ruleBasedDesign: SystemDesign, llmDesign: SystemDesign, in
 }
 
 async function generateLlmDesign(intent: Intent, ruleBasedDesign: SystemDesign): Promise<SystemDesign | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return null;
@@ -255,7 +255,7 @@ async function generateLlmDesign(intent: Intent, ruleBasedDesign: SystemDesign):
   const prompt = `
 You generate a minimal system design from extracted intent.
 
-Return ONLY JSON. No explanation.
+Return ONLY JSON. No explanation. No markdown fences.
 
 Schema:
 {
@@ -283,22 +283,18 @@ ${JSON.stringify(ruleBasedDesign)}
 `;
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-5.2",
-        temperature: 0,
-        response_format: DESIGN_RESPONSE_FORMAT,
-        messages: [
-          {
-            role: "developer",
-            content: prompt
-          }
-        ]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: "application/json"
+        }
       })
     });
 
@@ -306,8 +302,8 @@ ${JSON.stringify(ruleBasedDesign)}
       return null;
     }
 
-    const result = (await response.json()) as ChatCompletionResponse;
-    const content = result.choices?.[0]?.message?.content;
+    const result = await response.json() as any;
+    const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     return typeof content === "string" ? parseDesign(content) : null;
   } catch {

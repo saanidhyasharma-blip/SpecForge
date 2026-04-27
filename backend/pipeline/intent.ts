@@ -129,11 +129,11 @@ function mockExtractIntent(input: string): Intent {
 }
 
 export async function extractIntent(input: string): Promise<Intent> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   const prompt = `
 You are a system that extracts structured intent.
 
-Return ONLY JSON. No explanation.
+Return ONLY JSON. No explanation. No markdown fences.
 
 Schema:
 {
@@ -159,34 +159,30 @@ ${input}
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-5.2",
-        temperature: 0,
-        response_format: INTENT_RESPONSE_FORMAT,
-        messages: [
-          {
-            role: "developer",
-            content: prompt
-          }
-        ]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: "application/json"
+        }
       })
     });
 
     if (!response.ok) {
-      return DEFAULT_INTENT;
+      return mockExtractIntent(input);
     }
 
-    const result = (await response.json()) as ChatCompletionResponse;
-    const content = result.choices?.[0]?.message?.content;
+    const result = await response.json() as any;
+    const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     return typeof content === "string" ? parseIntent(content) : DEFAULT_INTENT;
   } catch {
-    return DEFAULT_INTENT;
+    return mockExtractIntent(input);
   }
 }

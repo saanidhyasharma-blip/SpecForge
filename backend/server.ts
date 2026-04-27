@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { runPipeline } from "./pipeline/orchestrator";
@@ -5,9 +6,17 @@ import { runPipeline } from "./pipeline/orchestrator";
 const app = express();
 const port = 3000;
 
-// Enable CORS explicitly handling the Vercel branch logic or strictly local 3001 Next.js
+// Enable CORS for local development and production
+const allowedOrigins = [
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3001",
+  origin: allowedOrigins,
   methods: ["GET", "POST"]
 }));
 
