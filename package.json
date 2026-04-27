@@ -1,0 +1,13 @@
+{
+  "name": "specforge",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=specforge-backend",
+    "build": "npm run build --workspace=specforge-backend",
+    "start": "npm run start --workspace=specforge-backend"
+  }
+}
