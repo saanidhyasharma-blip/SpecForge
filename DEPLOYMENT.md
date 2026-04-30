@@ -3,41 +3,46 @@
 SpecForge is split into two deployable services:
 
 - `backend`: Express API for `/health` and `/run`
-- `frontend`: Next.js app that calls the API with `NEXT_PUBLIC_API_URL`
+- `frontend`: Next.js app with an `/api/run` proxy route that calls the backend
 
-## 1. Deploy The Backend On Render
+## Preferred: Deploy Both Services On Render
 
 1. Push this repository to GitHub.
 2. In Render, create a new Blueprint from the repository.
-3. Render will read `render.yaml` and create `specforge-api`.
+3. Render will read `render.yaml` and create:
+   - `specforge-api`
+   - `specforge-web`
 4. When prompted for environment variables, set:
 
 ```text
 GEMINI_API_KEY=your_gemini_api_key
-FRONTEND_URL=https://your-frontend-domain.vercel.app
+FRONTEND_URL=https://your-specforge-web-url.onrender.com
 ```
 
-After the service is live, test:
+After the services are live, test:
 
 ```bash
 curl https://your-render-api-url.onrender.com/health
 ```
 
-## 2. Deploy The Frontend On Vercel
+Then open `https://your-specforge-web-url.onrender.com`.
+
+## Alternative: Frontend On Vercel, Backend On Render
 
 1. Import the same GitHub repository into Vercel.
 2. Set the project root directory to `frontend`.
-3. Add this environment variable:
+3. Add these environment variables:
 
 ```text
-NEXT_PUBLIC_API_URL=https://your-render-api-url.onrender.com
+NEXT_PUBLIC_API_URL=/api
+BACKEND_URL=https://your-render-api-url.onrender.com
 ```
 
 4. Deploy.
 
-## 3. Finish CORS
+## CORS
 
-After Vercel gives you the frontend URL, add it to the Render backend's `FRONTEND_URL` environment variable and redeploy the backend.
+If the browser calls the backend directly, add the frontend URL to the Render backend's `FRONTEND_URL` environment variable and redeploy the backend.
 
 For multiple frontend domains, use:
 

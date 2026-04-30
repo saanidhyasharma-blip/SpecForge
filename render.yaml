@@ -15,3 +15,20 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+
+  - type: web
+    runtime: node
+    name: specforge-web
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BACKEND_INTERNAL_URL
+        fromService:
+          name: specforge-api
+          type: web
+          property: hostport
