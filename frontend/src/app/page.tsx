@@ -16,7 +16,7 @@ export default function Home() {
     setResult(null);
     setApiError(null);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000").replace(/\/$/, "");
     console.log(`[SpecForge] Dispatching payload to ${apiUrl}/run...`);
     console.log(`[SpecForge] Prompt: "${prompt}"`);
 

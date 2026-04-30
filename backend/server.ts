@@ -4,19 +4,39 @@ import cors from "cors";
 import { runPipeline } from "./pipeline/orchestrator";
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
+
+function getAllowedOrigins(): string[] {
+  const configuredOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URLS
+  ]
+    .filter(Boolean)
+    .flatMap((value) => value!.split(","))
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return [
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    ...configuredOrigins
+  ];
+}
 
 // Enable CORS for local development and production
-const allowedOrigins = [
-  "http://localhost:3001",
-  "http://127.0.0.1:3001",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  process.env.FRONTEND_URL,
-].filter(Boolean) as string[];
+const allowedOrigins = getAllowedOrigins();
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
   methods: ["GET", "POST"]
 }));
 
