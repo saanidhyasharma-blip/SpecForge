@@ -4,7 +4,7 @@ services:
     name: specforge-api
     rootDir: backend
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /health
     autoDeployTrigger: commit
@@ -21,7 +21,7 @@ services:
     name: specforge-web
     rootDir: frontend
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     autoDeployTrigger: commit
     envVars:
