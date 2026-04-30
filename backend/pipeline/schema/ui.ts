@@ -33,41 +33,70 @@ function normalize(value: string): string {
   return value.toLowerCase();
 }
 
+function toResourcePath(entity: string): string {
+  const normalized = entity.toLowerCase();
+  const uncountable = new Set(["weather"]);
+
+  if (uncountable.has(normalized) || normalized.endsWith("s")) {
+    return `/${normalized}`;
+  }
+
+  return `/${normalized}s`;
+}
+
 export function generateUISchema(design: Design): UISchema {
-  const pages: string[] = [];
+  const pages: string[] = ["HomePage"]; // Rule: Always include Home
   const components: UIComponent[] = [];
 
-  design.flows.forEach((flow) => {
-    const normalized = normalize(flow);
+  const entities = design.entities.length > 0 ? design.entities : ["User"];
+  const flows = design.flows.map(normalize);
 
-    if (normalized.includes("signs in") || normalized.includes("login")) {
-      addUniquePage(pages, "LoginPage");
-      // UI components must map to API endpoints
-      addComponent(components, "LoginForm", ["POST /auth/login"]);
-    }
+  // Check for Auth
+  const hasAuth = entities.some(e => ["user", "admin", "role", "account"].includes(e.toLowerCase())) ||
+    flows.some(f => f.includes("signs in") || f.includes("login") || f.includes("auth"));
 
-    if (normalized.includes("dashboard")) {
-      addUniquePage(pages, "DashboardPage");
-      addComponent(components, "Navbar", ["POST /auth/logout", "GET /auth/me"]);
-      addComponent(components, "StatsCard", ["GET /users", "GET /contacts", "GET /payments"]);
-    }
+  if (hasAuth) {
+    addUniquePage(pages, "LoginPage");
+    addComponent(components, "LoginForm", ["POST /auth/login"]);
+    addComponent(components, "Navbar", ["POST /auth/logout", "GET /auth/me"]);
+  } else {
+    addComponent(components, "Navbar", []);
+  }
 
-    if (normalized.includes("contacts")) {
-      addUniquePage(pages, "ContactsPage");
-      addComponent(components, "ContactForm", ["POST /contacts"]);
-      addComponent(components, "ContactTable", ["GET /contacts", "DELETE /contacts/:id", "PUT /contacts/:id"]);
-    }
+  // Check for Dashboard
+  const hasDashboard = flows.some(f => f.includes("dashboard") || f.includes("stats") || f.includes("overview"));
+  if (hasDashboard) {
+    addUniquePage(pages, "DashboardPage");
+    // Dashboard typically shows summaries of main entities
+    const dashboardEndpoints = entities.slice(0, 3).map(e => `GET ${toResourcePath(e)}`);
+    addComponent(components, "StatsCard", dashboardEndpoints);
+  }
 
-    if (normalized.includes("payment")) {
-      addUniquePage(pages, "PaymentsPage");
-      addComponent(components, "PaymentForm", ["POST /payments"]);
-      addComponent(components, "PaymentTable", ["GET /payments", "DELETE /payments/:id", "PUT /payments/:id"]);
-    }
+  // Generate pages and components for entities
+  entities.forEach(entity => {
+    const normalized = entity.toLowerCase();
+    if (normalized === "user" && hasAuth) return; // Handled by auth
 
-    if (normalized.includes("allowed actions")) {
-      addComponent(components, "Navbar", []);
-    }
+    const pageName = `${entity}Page`;
+    const resourcePath = toResourcePath(entity);
+
+    addUniquePage(pages, pageName);
+    
+    // Each entity gets a Form and a Table (as requested: "form", "table")
+    addComponent(components, "DataForm", [`POST ${resourcePath}`]);
+    addComponent(components, "DataTable", [
+      `GET ${resourcePath}`,
+      `DELETE ${resourcePath}/:id`,
+      `PUT ${resourcePath}/:id`
+    ]);
   });
+
+  // Ensure "form" and "table" components are represented if entities exist
+  if (entities.length > 0) {
+      // These are already added as DataForm and DataTable, which are specific forms/tables.
+      // If the user wants generic "form" and "table" names, we can add them or alias them.
+      // But DataForm/DataTable are more descriptive for mapping to endpoints.
+  }
 
   return {
     pages,

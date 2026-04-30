@@ -39,9 +39,6 @@ export function simulateExecution(schema: FullSchema): SimulationResult {
   }
   
   const roles = Object.keys(schema.auth.roles);
-  if (roles.length === 0) {
-    return { success: false, message: "Execution failed: Auth has no roles defined." };
-  }
   for (const [role, permissions] of Object.entries(schema.auth.roles)) {
     if (!Array.isArray(permissions) || permissions.length === 0) {
       return { success: false, message: `Execution failed: Auth role '${role}' has no permissions assigned.` };

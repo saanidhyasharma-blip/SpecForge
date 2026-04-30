@@ -69,6 +69,12 @@ function addUnique(items: Set<string>, value: string): void {
   }
 }
 
+function hasFeature(features: string[], targets: string[]): boolean {
+  return features.some((feature) =>
+    targets.some((target) => feature === target || feature.includes(target))
+  );
+}
+
 function includesAny(values: string[], targets: string[]): boolean {
   return values.some((value) => targets.includes(normalize(value)));
 }
@@ -147,23 +153,71 @@ function buildRuleBasedDesign(intent: Intent): SystemDesign {
   intent.entities.forEach((entity) => addUnique(entities, entity));
   roles.forEach((role) => addUnique(entities, role));
 
-  if (includesAny(features, ["login", "auth", "authentication"])) {
+  if (hasFeature(features, ["login", "auth", "authentication"])) {
     addUnique(entities, "user");
     flows.push("User signs in");
   }
 
-  if (includesAny(features, ["contacts", "crm"])) {
+  if (hasFeature(features, ["contacts", "crm"])) {
     addUnique(entities, "contact");
     flows.push("User manages contacts");
   }
 
-  if (includesAny(features, ["payments", "billing"])) {
+  if (hasFeature(features, ["payments", "billing"])) {
     addUnique(entities, "payment");
     addUnique(entities, "subscription");
     flows.push("User completes payment");
   }
 
-  if (includesAny(features, ["dashboard"])) {
+  if (hasFeature(features, ["weather", "forecast"])) {
+    addUnique(entities, "weather");
+    flows.push("User searches weather by city");
+    flows.push("User views weather forecast");
+  }
+
+  if (hasFeature(features, ["commerce", "storefront", "shop", "inventory"])) {
+    addUnique(entities, "product");
+    addUnique(entities, "order");
+    flows.push("User browses products");
+    flows.push("User places order");
+  }
+
+  if (hasFeature(features, ["tasks", "todo", "kanban"])) {
+    addUnique(entities, "task");
+    flows.push("User manages tasks");
+  }
+
+  if (hasFeature(features, ["booking", "appointment", "reservation"])) {
+    addUnique(entities, "booking");
+    flows.push("User schedules booking");
+  }
+
+  if (hasFeature(features, ["social"])) {
+    addUnique(entities, "post");
+    flows.push("User publishes posts");
+  }
+
+  if (hasFeature(features, ["hr"])) {
+    addUnique(entities, "employee");
+    flows.push("Manager reviews employee requests");
+  }
+
+  if (hasFeature(features, ["recipes"])) {
+    addUnique(entities, "recipe");
+    flows.push("User publishes recipes");
+  }
+
+  if (hasFeature(features, ["finance"])) {
+    addUnique(entities, "transaction");
+    flows.push("User tracks transactions");
+  }
+
+  if (hasFeature(features, ["chat"])) {
+    addUnique(entities, "message");
+    flows.push("User sends messages");
+  }
+
+  if (hasFeature(features, ["dashboard"])) {
     flows.push("User views dashboard");
   }
 
@@ -189,11 +243,21 @@ function buildRuleBasedDesign(intent: Intent): SystemDesign {
       addUniqueText(relationships, "User has many Payments");
     } else if (entity === "Subscription") {
       addUniqueText(relationships, "User has one Subscription");
+    } else if (["Task", "Project", "Booking", "Post", "Comment", "Recipe", "Transaction", "Budget", "Message", "Order"].includes(entity)) {
+      addUniqueText(relationships, `User has many ${entity}s`);
     }
   });
 
   if (entities.has("Payment") && entities.has("Subscription")) {
     addUniqueText(relationships, "Subscription has many Payments");
+  }
+
+  if (entities.has("Project") && entities.has("Task")) {
+    addUniqueText(relationships, "Project has many Tasks");
+  }
+
+  if (entities.has("Product") && entities.has("Order")) {
+    addUniqueText(relationships, "Order has many Products");
   }
 
   return {

@@ -101,7 +101,126 @@ function parseIntent(content: string): Intent {
   return DEFAULT_INTENT;
 }
 
+function addUnique(items: string[], value: string): void {
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized || items.some((item) => item.trim().toLowerCase() === normalized)) {
+    return;
+  }
+
+  items.push(value.trim());
+}
+
+function inferIntentFromText(input: string): Intent {
+  const text = input.toLowerCase();
+  const intent: Intent = {
+    features: [],
+    roles: [],
+    entities: [],
+    constraints: []
+  };
+
+  const addFeature = (value: string) => addUnique(intent.features, value);
+  const addRole = (value: string) => addUnique(intent.roles, value);
+  const addEntity = (value: string) => addUnique(intent.entities, value);
+  const addConstraint = (value: string) => addUnique(intent.constraints, value);
+
+  if (/\b(login|sign in|signin|auth|authentication|account)\b/.test(text)) addFeature("auth");
+  if (/\b(dashboard|analytics|stats|overview|report)\b/.test(text)) addFeature("dashboard");
+  if (/\b(crm|contact|contacts|lead|leads)\b/.test(text)) {
+    addFeature("crm");
+    addEntity("contact");
+  }
+  if (/\b(payment|payments|billing|checkout|subscription)\b/.test(text)) {
+    addFeature("payments");
+    addEntity("payment");
+  }
+  if (/\b(weather|forecast|temperature|climate)\b/.test(text)) {
+    addFeature("weather");
+    addEntity("weather");
+  }
+  if (/\b(e-commerce|ecommerce|storefront|shop|shopping cart|cart|product|inventory)\b/.test(text)) {
+    addFeature("commerce");
+    addEntity("product");
+    if (/\b(cart|checkout|order|orders)\b/.test(text)) addEntity("order");
+  }
+  if (/\b(task|tasks|todo|kanban|project board|project boards)\b/.test(text)) {
+    addFeature("tasks");
+    addEntity("task");
+    if (/\b(project|board)\b/.test(text)) addEntity("project");
+  }
+  if (/\b(booking|appointment|reservation|schedule)\b/.test(text)) {
+    addFeature("booking");
+    addEntity("booking");
+  }
+  if (/\b(patient|doctor|clinic|medical)\b/.test(text)) {
+    addEntity("patient");
+    addEntity("doctor");
+  }
+  if (/\b(photo|media|post|comment|follow|social)\b/.test(text)) {
+    addFeature("social");
+    addEntity("post");
+    if (/\b(comment|comments)\b/.test(text)) addEntity("comment");
+  }
+  if (/\b(employee|hr|leave|manager|working hours|timesheet)\b/.test(text)) {
+    addFeature("hr");
+    addEntity("employee");
+    if (/\b(leave|request)\b/.test(text)) addEntity("leaveRequest");
+  }
+  if (/\b(recipe|recipes)\b/.test(text)) {
+    addFeature("recipes");
+    addEntity("recipe");
+  }
+  if (/\b(expense|expenses|budget|finance|transaction|transactions)\b/.test(text)) {
+    addFeature("finance");
+    addEntity("transaction");
+    if (/\b(budget|budgets)\b/.test(text)) addEntity("budget");
+  }
+  if (/\b(chat|message|messaging)\b/.test(text)) {
+    addFeature("chat");
+    addEntity("message");
+  }
+
+  if (/\badmin\b/.test(text)) addRole("admin");
+  if (/\b(user|users|customer|customers|member|members|employee|employees|patient|patients)\b/.test(text)) addRole("user");
+  if (/\bmanager\b/.test(text)) addRole("manager");
+  if (/\bmoderator\b/.test(text)) addRole("moderator");
+
+  if (/\btypescript\b/.test(text)) addConstraint("typescript");
+  if (/\bminimal|simple|lightweight\b/.test(text)) addConstraint("minimal");
+  if (/\bmobile|phone|responsive\b/.test(text)) addConstraint("responsive");
+
+  return intent;
+}
+
+function mergeIntent(primary: Intent, fallback: Intent): Intent {
+  const merged: Intent = {
+    features: [...primary.features],
+    roles: [...primary.roles],
+    entities: [...primary.entities],
+    constraints: [...primary.constraints]
+  };
+
+  fallback.features.forEach((item) => addUnique(merged.features, item));
+  fallback.roles.forEach((item) => addUnique(merged.roles, item));
+  fallback.entities.forEach((item) => addUnique(merged.entities, item));
+  fallback.constraints.forEach((item) => addUnique(merged.constraints, item));
+
+  return merged;
+}
+
 function mockExtractIntent(input: string): Intent {
+  const inferred = inferIntentFromText(input);
+
+  if (
+    inferred.features.length > 0 ||
+    inferred.roles.length > 0 ||
+    inferred.entities.length > 0 ||
+    inferred.constraints.length > 0
+  ) {
+    return inferred;
+  }
+
   const text = input.toLowerCase();
 
   return {
@@ -130,6 +249,7 @@ function mockExtractIntent(input: string): Intent {
 
 export async function extractIntent(input: string): Promise<Intent> {
   const apiKey = process.env.GEMINI_API_KEY;
+  const inferredIntent = inferIntentFromText(input);
   const prompt = `
 You are a system that extracts structured intent.
 
@@ -181,7 +301,8 @@ ${input}
     const result = await response.json() as any;
     const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    return typeof content === "string" ? parseIntent(content) : DEFAULT_INTENT;
+    const parsedIntent = typeof content === "string" ? parseIntent(content) : DEFAULT_INTENT;
+    return mergeIntent(parsedIntent, inferredIntent);
   } catch {
     return mockExtractIntent(input);
   }

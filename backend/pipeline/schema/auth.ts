@@ -4,36 +4,43 @@ export interface AuthSchema {
   roles: Record<string, string[]>;
 }
 
-const KNOWN_ROLES = new Set(["Admin", "User", "Member"]);
+const KNOWN_ROLES = new Set(["Admin", "User", "Member", "Manager", "Moderator"]);
 
 export function generateAuthSchema(design: Design): AuthSchema {
+  const entities = design.entities;
+  const flows = design.flows.map(f => f.toLowerCase());
+  
   const authSchema: AuthSchema = {
     roles: {}
   };
 
-  const roles = design.entities.filter((entity) => KNOWN_ROLES.has(entity));
-  const resources = design.entities.filter((entity) => !KNOWN_ROLES.has(entity));
+  const roles = entities.filter((entity) => KNOWN_ROLES.has(entity));
+  const resources = entities.filter((entity) => !KNOWN_ROLES.has(entity));
+  const hasAuth = roles.length > 0 || 
+    entities.some(e => ["user", "admin", "role", "account"].includes(e.toLowerCase())) ||
+    flows.some(f => f.includes("signs in") || f.includes("login") || f.includes("auth"));
 
-  roles.forEach((role) => {
+  if (!hasAuth) {
+    return authSchema;
+  }
+
+  const effectiveRoles = roles.length > 0 ? roles : ["User"];
+
+  effectiveRoles.forEach((role) => {
     if (role.toLowerCase() === "admin") {
-      // admin gets full access
       authSchema.roles[role] = ["*"];
+    } else if (role.toLowerCase() === "manager" || role.toLowerCase() === "moderator") {
+      authSchema.roles[role] = resources.length > 0
+        ? resources.map(resource => `read:${resource.toLowerCase()}`)
+        : ["read:limited"];
     } else if (role.toLowerCase() === "user") {
-      // user gets limited access based on the entities present
       authSchema.roles[role] = resources.length > 0 
         ? resources.map(resource => `read:${resource.toLowerCase()}`)
         : ["read:limited"];
     } else {
-      authSchema.roles[role] = [];
+      authSchema.roles[role] = ["read:limited"];
     }
   });
-
-  // If no roles specified but the design usually implies users, we could add a default
-  if (roles.length === 0 && design.flows.some((flow) => flow.toLowerCase().includes("signs in"))) {
-      authSchema.roles["User"] = resources.length > 0 
-        ? resources.map(resource => `read:${resource.toLowerCase()}`)
-        : ["read:limited"];
-  }
 
   return authSchema;
 }

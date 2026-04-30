@@ -66,7 +66,7 @@ export function repairAPI(schema: FullSchema, error: ValidationError): void {
   schema.db.tables.forEach(table => {
     if (!table.name) return;
     const tableName = table.name.toLowerCase();
-    const pluralName = tableName.endsWith('s') ? tableName : tableName + 's';
+    const pluralName = tableName === "weather" || tableName.endsWith('s') ? tableName : tableName + 's';
     
     // Check if any endpoint path starts with this resource
     const hasEndpoint = Array.from(apiPaths).some(p => p.includes(`/${tableName}`) || p.includes(`/${pluralName}`));
@@ -86,11 +86,75 @@ export function repairAPI(schema: FullSchema, error: ValidationError): void {
 }
 
 export function repairUI(schema: FullSchema, error: ValidationError): void {
-  if (!schema.ui || !schema.ui.components) return;
+  if (!schema.ui) schema.ui = { pages: [], components: [] };
+  if (!Array.isArray(schema.ui.pages)) schema.ui.pages = [];
+  if (!Array.isArray(schema.ui.components)) schema.ui.components = [];
   if (!schema.api) schema.api = { endpoints: [] };
   if (!schema.api.endpoints) schema.api.endpoints = [];
 
   const apiEndpointKeys = new Set(schema.api.endpoints.map(e => `${e.method.toUpperCase()} ${e.path.toLowerCase()}`));
+  const addPage = (page: string) => {
+    if (!schema.ui.pages.includes(page)) schema.ui.pages.push(page);
+  };
+  const addComponent = (name: string, endpoints: string[]) => {
+    const existing = schema.ui.components.find(comp => comp.name === name);
+    if (existing) {
+      if (!Array.isArray(existing.endpoints)) existing.endpoints = [];
+      endpoints.forEach(endpoint => {
+        if (!existing.endpoints.includes(endpoint)) existing.endpoints.push(endpoint);
+      });
+      return;
+    }
+
+    schema.ui.components.push({ name, endpoints: [...endpoints] });
+  };
+  const toPageName = (resource: string) => {
+    const singular = resource.endsWith("s") ? resource.slice(0, -1) : resource;
+    return `${singular.charAt(0).toUpperCase()}${singular.slice(1)}Page`;
+  };
+  const resourcePaths = new Set<string>();
+
+  addPage("HomePage");
+
+  schema.api.endpoints.forEach((endpoint) => {
+    if (!endpoint.path || endpoint.path.startsWith("/auth")) return;
+    const resourcePath = `/${endpoint.path.split("/")[1]}`;
+    resourcePaths.add(resourcePath);
+  });
+
+  if (resourcePaths.size === 0 && schema.db && Array.isArray(schema.db.tables)) {
+    schema.db.tables.forEach((table) => {
+      if (!table.name) return;
+      const tableName = table.name.toLowerCase();
+      const path = tableName === "weather" || tableName.endsWith("s") ? `/${tableName}` : `/${tableName}s`;
+      resourcePaths.add(path);
+    });
+  }
+
+  resourcePaths.forEach((resourcePath) => {
+    const resource = resourcePath.slice(1);
+    const pageName = toPageName(resource);
+    addPage(pageName);
+    addComponent(`${pageName.replace("Page", "")}Form`, [`POST ${resourcePath}`]);
+    addComponent(`${pageName.replace("Page", "")}Table`, [
+      `GET ${resourcePath}`,
+      `PUT ${resourcePath}/:id`,
+      `DELETE ${resourcePath}/:id`
+    ]);
+  });
+
+  const hasAuthEndpoints = schema.api.endpoints.some(endpoint => endpoint.path?.startsWith("/auth"));
+  if (hasAuthEndpoints) {
+    addPage("LoginPage");
+    addComponent("LoginForm", ["POST /auth/login"]);
+    addComponent("Navbar", ["POST /auth/logout", "GET /auth/me"]);
+  } else {
+    addComponent("Navbar", []);
+  }
+
+  if (schema.ui.components.length === 0) {
+    addComponent("OverviewPanel", []);
+  }
 
   // If UI page/component has no matching API -> Add corresponding API endpoint
   schema.ui.components.forEach(comp => {

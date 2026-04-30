@@ -1,5 +1,5 @@
 import type { Design } from "../design";
-import { DEFAULT_ENTITY_FIELDS } from "./db";
+import { getFieldsForEntity } from "./db";
 
 export interface APIEndpoint {
   path: string;
@@ -13,10 +13,17 @@ export interface APISchema {
 }
 
 function toResourcePath(entity: string): string {
-  return `/${entity.toLowerCase()}s`;
+  const normalized = entity.toLowerCase();
+  const uncountable = new Set(["weather"]);
+
+  if (uncountable.has(normalized) || normalized.endsWith("s")) {
+    return `/${normalized}`;
+  }
+
+  return `/${normalized}s`;
 }
 
-function fieldsToObject(fields: typeof DEFAULT_ENTITY_FIELDS) {
+function fieldsToObject(fields: any[]) {
   const obj: Record<string, string> = {};
   for (const field of fields) {
     obj[field.name] = field.type;
@@ -29,7 +36,8 @@ function createCrudEndpoints(entity: string): APIEndpoint[] {
   const itemPath = `${resourcePath}/:id`;
 
   // API fields must match DB fields
-  const entityFields = fieldsToObject(DEFAULT_ENTITY_FIELDS);
+  const fields = getFieldsForEntity(entity);
+  const entityFields = fieldsToObject(fields);
 
   return [
     {
@@ -67,18 +75,22 @@ function createCrudEndpoints(entity: string): APIEndpoint[] {
 
 function needsAuthEndpoints(design: Design): boolean {
   return (
-    design.entities.includes("User") ||
-    design.flows.some((flow) => flow.toLowerCase().includes("signs in"))
+    design.entities.some(e => ["user", "admin", "role", "account"].includes(e.toLowerCase())) ||
+    design.flows.some((flow) => {
+      const f = flow.toLowerCase();
+      return f.includes("signs in") || f.includes("login") || f.includes("auth");
+    })
   );
 }
 
 function createAuthEndpoints(): APIEndpoint[] {
+  const userFields = fieldsToObject(getFieldsForEntity("User"));
   return [
     {
       path: "/auth/login",
       method: "POST",
       request: { body: { email: "string", password: "string" } },
-      response: { token: "string", user: fieldsToObject(DEFAULT_ENTITY_FIELDS) }
+      response: { token: "string", user: userFields }
     },
     {
       path: "/auth/logout",
@@ -90,17 +102,23 @@ function createAuthEndpoints(): APIEndpoint[] {
       path: "/auth/me",
       method: "GET",
       request: {},
-      response: { user: fieldsToObject(DEFAULT_ENTITY_FIELDS) }
+      response: { user: userFields }
     }
   ];
 }
 
 export function generateAPISchema(design: Design): APISchema {
-  // Generate full CRUD endpoints for each entity
-  const endpoints = design.entities.flatMap(createCrudEndpoints);
+  const entities = design.entities.length > 0 ? design.entities : ["User"];
+  const flows = design.flows.map(f => f.toLowerCase());
 
-  // Include auth endpoints if necessary
-  if (needsAuthEndpoints(design) || design.entities.some(e => e.toLowerCase() === "admin" || e.toLowerCase() === "user")) {
+  // Generate full CRUD endpoints for each entity
+  const endpoints = entities.flatMap(createCrudEndpoints);
+
+  // Include auth endpoints if necessary (using same logic as UI)
+  const hasAuth = entities.some(e => ["user", "admin", "role", "account"].includes(e.toLowerCase())) ||
+    flows.some(f => f.includes("signs in") || f.includes("login") || f.includes("auth"));
+
+  if (hasAuth) {
     endpoints.unshift(...createAuthEndpoints());
   }
 
